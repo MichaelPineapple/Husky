@@ -1,8 +1,60 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/tcp.h>
 
-#include<stdio.h>
+#define PORT 8080
 
-int main(int argc, char* argv[])
+int startServer()
 {
-    printf("*** Husky ***\n");
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    bind(sock, (struct sockaddr*)&addr, sizeof(addr));
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    return sock;
+}
+
+char* handleRequest(char* request)
+{
+    return "Hello, World!";
+}
+
+int main()
+{
+    printf("*** Husky Server ***\n");
+    int sock = startServer();
+    bool loop = true;
+    while (loop)
+    {
+        listen(sock, 1);
+        int client = accept(sock, NULL, NULL);
+        char reqBuffer[1024];
+        recv(client, reqBuffer, sizeof(reqBuffer), 0);
+        printf("REQUEST:\n%s\n\n", reqBuffer);
+        char respBuffer[1024];
+        char* body = handleRequest(reqBuffer);
+        const char* FORMAT = 
+            "HTTP/1.1 200 OK\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Credentials: true\r\n"
+            "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %lu\r\n\r\n%s";
+        snprintf(respBuffer, sizeof(respBuffer), FORMAT, strlen(body), body);
+        send(client, respBuffer, strlen(respBuffer), 0);
+        printf("RESPONSE:\n%s\n\n", respBuffer);
+        fflush(stdout);
+        close(client);
+    }
     return 0;
 }
