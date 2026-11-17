@@ -11,6 +11,51 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include "utils.c"
+
+void* handle_request(char* request)
+{
+    char* endpoint = get_endpoint(request);
+    printf("Request: %s\n", endpoint);
+    str_prepend(endpoint, "html");
+    if (is_dir(endpoint)) strcat(endpoint, "index.html");
+    FILE* file = fopen(endpoint, "r");
+    char* body = "Not Found!";
+    if (file) body = read_file(file);
+    fclose(file);
+    
+    char* filetype = get_filetype(endpoint);
+    char* content_type = "text/plain";
+    if (streq(filetype, ".html")) content_type = "text/html";
+    else if (streq(filetype, ".css")) content_type = "text/css";
+    else if (streq(filetype, ".js")) content_type = "application/javascript";
+
+    const char* FORMAT =
+        "HTTP/1.1 200 OK\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
+        "Content-Type: %s; charset=utf-8\r\n"
+        "Content-Length: %lu\r\n"
+        "\r\n%s";
+    
+    int content_len = strlen(body);
+    int total_len = content_len + int_strlen(content_len) + strlen(content_type) + strlen(FORMAT);
+    char* response = malloc(total_len);
+    snprintf(response, total_len, FORMAT, content_type, content_len, body);
+    return response;
+}
+
+void handle_connection(SSL* ssl, int client)
+{
+    char request[1024];
+    if (ssl) SSL_read(ssl, request, sizeof(request));
+    else recv(client, request, sizeof(request), 0);
+    char* response = handle_request(request);
+    if (ssl) SSL_write(ssl, response, strlen(response));
+    else send(client, response, strlen(response), 0);
+}
+
 SSL_CTX* init_ssl(char* filename_fullchain, char* filename_privkey)
 {
     OPENSSL_init_ssl(0, NULL);
@@ -20,37 +65,6 @@ SSL_CTX* init_ssl(char* filename_fullchain, char* filename_privkey)
     SSL_CTX_use_PrivateKey_file(ctx, filename_privkey, SSL_FILETYPE_PEM);
     if (!SSL_CTX_check_private_key(ctx)) return NULL;
     return ctx;
-}
-
-char* handle_request(char* request)
-{
-    return "Hello, World!";
-}
-
-void handle_connection(SSL* ssl, int client)
-{
-    char request_buffer[1024];
-    if (ssl) SSL_read(ssl, request_buffer, sizeof(request_buffer));
-    else recv(client, request_buffer, sizeof(request_buffer), 0);
-    printf("REQUEST:\n%s\n\n", request_buffer);
-    
-    char response_buffer[1024];
-    char* body = handle_request(request_buffer);
-    
-    const char* FORMAT =
-        "HTTP/1.1 200 OK\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Credentials: true\r\n"
-        "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %lu\r\n\r\n%s";
-    
-    snprintf(response_buffer, sizeof(response_buffer), FORMAT, strlen(body), body);
-    
-    if (ssl) SSL_write(ssl, response_buffer, strlen(response_buffer));
-    else send(client, response_buffer, strlen(response_buffer), 0);
-    
-    printf("RESPONSE:\n%s\n\n", response_buffer);
 }
 
 int start_server(int port)
@@ -69,7 +83,7 @@ int start_server(int port)
 int main(int argc, char* argv[])
 {
     printf("*** Husky ***\n");
-    
+
     SSL_CTX* ssl_ctx = NULL;
     if (argc > 2) ssl_ctx = init_ssl(argv[2], argv[3]);
     int sock = start_server(atoi(argv[1]));

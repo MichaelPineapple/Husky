@@ -14,6 +14,11 @@ Compile Linux
 gcc main.c -lssl -lcrypto -lpthread
 ```
 
+Run
+```
+./a.out 443 server.cert server.key
+```
+
 Install OpenSSL Dev Library On Linux
 ```
 sudo yum install openssl-devel
@@ -21,7 +26,7 @@ sudo yum install openssl-devel
 
 Example Curl Request
 ```
-curl -k -X POST https://localhost:8080 \
+curl -k -X POST https://localhost \
      -H "Content-Type: application/json" \
      -d '{"test":"hello"}'
 ```
