@@ -1,9 +1,27 @@
 # Husky
 HTTP Server
 
+Compile
+```
+gcc main.c \            
+    -I$(brew --prefix openssl)/include \
+    -L$(brew --prefix openssl)/lib \
+    -lssl -lcrypto -lpthread
+```
+
 Example Curl Request
 ```
-curl -X POST http://localhost:8080 \
+curl -k -X POST http://localhost:8080 \
      -H "Content-Type: application/json" \
      -d '{"test":"hello"}'
  ```
+
+
+Generate SSL Certificate
+```
+openssl req -x509 -newkey rsa:2048 \
+    -keyout server.key \
+    -out server.cert \
+    -days 365 \
+    -nodes
+```
