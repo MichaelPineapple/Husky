@@ -13,18 +13,18 @@
 
 #define PORT 8080
 
-SSL_CTX* init_ssl()
+SSL_CTX* init_ssl(char* filename_fullchain, char* filename_privkey)
 {
     OPENSSL_init_ssl(0, NULL);
     SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
     SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-    SSL_CTX_use_certificate_file(ctx, "server.cert", SSL_FILETYPE_PEM);
-    SSL_CTX_use_PrivateKey_file(ctx, "server.key", SSL_FILETYPE_PEM);
+    SSL_CTX_use_certificate_chain_file(ctx, filename_fullchain);
+    SSL_CTX_use_PrivateKey_file(ctx, filename_privkey, SSL_FILETYPE_PEM);
     if (!SSL_CTX_check_private_key(ctx)) return NULL;
     return ctx;
 }
 
-int startServer()
+int start_server()
 {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in addr;
@@ -37,24 +37,19 @@ int startServer()
     return sock;
 }
 
-char* handleRequest(char* request)
+char* handle_request(char* request)
 {
     return "Hello, World!";
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     printf("*** Husky Server ***\n");
+
+    SSL_CTX* ssl_ctx = init_ssl(argv[1], argv[2]);
+    if (!ssl_ctx) { ERR_print_errors_fp(stderr); return 1; }
     
-    SSL_CTX* ssl_ctx = init_ssl();
-    if (!ssl_ctx)
-    {
-        fprintf(stderr, "Failed to initialize SSL!\n");
-        ERR_print_errors_fp(stderr);
-        return 1;
-    }
-    
-    int sock = startServer();
+    int sock = start_server();
     bool loop = true;
     while (loop)
     {
@@ -71,21 +66,23 @@ int main()
             continue;
         }
         
-        char reqBuffer[1024];
-        SSL_read(ssl, reqBuffer, sizeof(reqBuffer));
-        printf("REQUEST:\n%s\n\n", reqBuffer);
-        char respBuffer[1024];
-        char* body = handleRequest(reqBuffer);
-        const char* FORMAT = 
+        char req_buffer[1024];
+        SSL_read(ssl, req_buffer, sizeof(req_buffer));
+        printf("REQUEST:\n%s\n\n", req_buffer);
+        char resp_buffer[1024];
+        char* body = handle_request(req_buffer);
+        
+        const char* FORMAT =
             "HTTP/1.1 200 OK\r\n"
             "Access-Control-Allow-Origin: *\r\n"
             "Access-Control-Allow-Credentials: true\r\n"
             "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: %lu\r\n\r\n%s";
-        snprintf(respBuffer, sizeof(respBuffer), FORMAT, strlen(body), body);
-        SSL_write(ssl, respBuffer, strlen(respBuffer));
-        printf("RESPONSE:\n%s\n\n", respBuffer);
+        
+        snprintf(resp_buffer, sizeof(resp_buffer), FORMAT, strlen(body), body);
+        SSL_write(ssl, resp_buffer, strlen(resp_buffer));
+        printf("RESPONSE:\n%s\n\n", resp_buffer);
         fflush(stdout);
         close(client);
     }

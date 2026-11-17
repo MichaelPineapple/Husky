@@ -1,21 +1,30 @@
 # Husky
 HTTP Server
 
-Compile
+Compile MacOS
 ```
-gcc main.c \            
+gcc main.c \
     -I$(brew --prefix openssl)/include \
     -L$(brew --prefix openssl)/lib \
     -lssl -lcrypto -lpthread
 ```
 
+Compile Linux
+```
+gcc main.c -lssl -lcrypto -lpthread
+```
+
+Install OpenSSL Dev Library On Linux
+```
+sudo yum install openssl-devel
+```
+
 Example Curl Request
 ```
-curl -k -X POST http://localhost:8080 \
+curl -k -X POST https://localhost:8080 \
      -H "Content-Type: application/json" \
      -d '{"test":"hello"}'
- ```
-
+```
 
 Generate SSL Certificate
 ```
