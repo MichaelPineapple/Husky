@@ -11,8 +11,6 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define PORT 8080
-
 SSL_CTX* init_ssl(char* filename_fullchain, char* filename_privkey)
 {
     OPENSSL_init_ssl(0, NULL);
@@ -24,12 +22,43 @@ SSL_CTX* init_ssl(char* filename_fullchain, char* filename_privkey)
     return ctx;
 }
 
-int start_server()
+char* handle_request(char* request)
+{
+    return "Hello, World!";
+}
+
+void handle_connection(SSL* ssl, int client)
+{
+    char request_buffer[1024];
+    if (ssl) SSL_read(ssl, request_buffer, sizeof(request_buffer));
+    else recv(client, request_buffer, sizeof(request_buffer), 0);
+    printf("REQUEST:\n%s\n\n", request_buffer);
+    
+    char response_buffer[1024];
+    char* body = handle_request(request_buffer);
+    
+    const char* FORMAT =
+        "HTTP/1.1 200 OK\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: %lu\r\n\r\n%s";
+    
+    snprintf(response_buffer, sizeof(response_buffer), FORMAT, strlen(body), body);
+    
+    if (ssl) SSL_write(ssl, response_buffer, strlen(response_buffer));
+    else send(client, response_buffer, strlen(response_buffer), 0);
+    
+    printf("RESPONSE:\n%s\n\n", response_buffer);
+}
+
+int start_server(int port)
 {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(PORT);
+    addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
     bind(sock, (struct sockaddr*)&addr, sizeof(addr));
     int opt = 1;
@@ -37,53 +66,38 @@ int start_server()
     return sock;
 }
 
-char* handle_request(char* request)
-{
-    return "Hello, World!";
-}
-
 int main(int argc, char* argv[])
 {
-    printf("*** Husky Server ***\n");
-
-    SSL_CTX* ssl_ctx = init_ssl(argv[1], argv[2]);
-    if (!ssl_ctx) { ERR_print_errors_fp(stderr); return 1; }
+    printf("*** Husky ***\n");
     
-    int sock = start_server();
+    SSL_CTX* ssl_ctx = NULL;
+    if (argc > 2) ssl_ctx = init_ssl(argv[2], argv[3]);
+    int sock = start_server(atoi(argv[1]));
+    
+    SSL* ssl = NULL;
     bool loop = true;
     while (loop)
     {
+        ERR_print_errors_fp(stderr);
+        fflush(stdout);
+        if (ssl) SSL_free(ssl);
+        ssl = NULL;
+        
         listen(sock, 1);
         int client = accept(sock, NULL, NULL);
         
-        SSL* ssl = SSL_new(ssl_ctx);
-        SSL_set_fd(ssl, client);
-        if (SSL_accept(ssl) <= 0)
+        if (ssl_ctx)
         {
-            ERR_print_errors_fp(stderr);
-            SSL_free(ssl);
-            close(client);
-            continue;
+            ssl = SSL_new(ssl_ctx);
+            SSL_set_fd(ssl, client);
+            if (SSL_accept(ssl) <= 0)
+            {
+                close(client);
+                continue;
+            }
         }
         
-        char req_buffer[1024];
-        SSL_read(ssl, req_buffer, sizeof(req_buffer));
-        printf("REQUEST:\n%s\n\n", req_buffer);
-        char resp_buffer[1024];
-        char* body = handle_request(req_buffer);
-        
-        const char* FORMAT =
-            "HTTP/1.1 200 OK\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Access-Control-Allow-Credentials: true\r\n"
-            "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: %lu\r\n\r\n%s";
-        
-        snprintf(resp_buffer, sizeof(resp_buffer), FORMAT, strlen(body), body);
-        SSL_write(ssl, resp_buffer, strlen(resp_buffer));
-        printf("RESPONSE:\n%s\n\n", resp_buffer);
-        fflush(stdout);
+        handle_connection(ssl, client);
         close(client);
     }
     return 0;
