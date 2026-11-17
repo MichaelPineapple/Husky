@@ -26,7 +26,19 @@ char* get_filetype(char* path)
 
 bool streq(const char* str1, const char* str2)
 {
+    if (str1 == NULL && str2 == NULL) return true;
+    if (str1 == NULL || str2 == NULL) return false;
     return strcmp(str1, str2) == 0;
+}
+
+char* get_content_type(char* endpoint)
+{
+    char* filetype = get_filetype(endpoint);
+    char* content_type = "text/plain";
+    if (streq(filetype, ".html")) content_type = "text/html";
+    else if (streq(filetype, ".css")) content_type = "text/css";
+    else if (streq(filetype, ".js")) content_type = "application/javascript";
+    return content_type;
 }
 
 bool is_dir(const char* path)

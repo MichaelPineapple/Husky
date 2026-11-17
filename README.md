@@ -24,7 +24,7 @@ Install OpenSSL Dev Library On Linux
 sudo yum install openssl-devel
 ```
 
-Example Curl Request
+Example Curl POST Request
 ```
 curl -k -X POST https://localhost \
      -H "Content-Type: application/json" \

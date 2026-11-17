@@ -13,25 +13,10 @@
 
 #include "utils.c"
 
-void* handle_request(char* request)
+char* construct_response(char* status_code, char* content_type, char* body)
 {
-    char* endpoint = get_endpoint(request);
-    printf("Request: %s\n", endpoint);
-    str_prepend(endpoint, "html");
-    if (is_dir(endpoint)) strcat(endpoint, "index.html");
-    FILE* file = fopen(endpoint, "r");
-    char* body = "Not Found!";
-    if (file) body = read_file(file);
-    fclose(file);
-    
-    char* filetype = get_filetype(endpoint);
-    char* content_type = "text/plain";
-    if (streq(filetype, ".html")) content_type = "text/html";
-    else if (streq(filetype, ".css")) content_type = "text/css";
-    else if (streq(filetype, ".js")) content_type = "application/javascript";
-
     const char* FORMAT =
-        "HTTP/1.1 200 OK\r\n"
+        "HTTP/1.1 %s\r\n"
         "Access-Control-Allow-Origin: *\r\n"
         "Access-Control-Allow-Credentials: true\r\n"
         "Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization\r\n"
@@ -40,10 +25,26 @@ void* handle_request(char* request)
         "\r\n%s";
     
     int content_len = strlen(body);
-    int total_len = content_len + int_strlen(content_len) + strlen(content_type) + strlen(FORMAT);
+    int total_len = content_len + int_strlen(content_len) + strlen(status_code) + strlen(content_type) + strlen(FORMAT);
     char* response = malloc(total_len);
-    snprintf(response, total_len, FORMAT, content_type, content_len, body);
+    snprintf(response, total_len, FORMAT, status_code, content_type, content_len, body);
     return response;
+}
+
+void* handle_request(char* request)
+{
+    char* endpoint = get_endpoint(request);
+    printf("Request: %s\n", endpoint);
+    str_prepend(endpoint, "html");
+    if (is_dir(endpoint)) strcat(endpoint, "index.html");
+    
+    FILE* file = fopen(endpoint, "r");
+    if (!file) return construct_response("404 Not Found", "text/plain", "NOT FOUND");
+    char* body = read_file(file);
+    fclose(file);
+    
+    char* content_type = get_content_type(endpoint);
+    return construct_response("200 OK", content_type, body);
 }
 
 void handle_connection(SSL* ssl, int client)
