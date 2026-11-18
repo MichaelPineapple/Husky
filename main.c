@@ -15,12 +15,13 @@
 
 #define STATUS_OK "200 OK"
 #define STATUS_NOTFOUND "404 Not Found"
+#define STATUS_ERR "500 Internal Server Error"
 
 #define EXT_HTML ".html"
 #define EXT_CSS ".css"
 #define EXT_JS ".js"
 
-#define CTYPE_TEXT "text/plain"
+#define CTYPE_TXT "text/plain"
 #define CTYPE_HTML "text/html"
 #define CTYPE_CSS "text/css"
 #define CTYPE_JS "application/javascript"
@@ -53,13 +54,16 @@ char* handle_bin(char* endpoint, char* request)
     str_prepend(endpoint, ".");
     char* body = strstr(request, "\r\n\r\n") + 4;
     setenv("CONTENT_LENGTH", int_to_str(strlen(body)), 1);
-    return execute_program(endpoint, body);
+    int exit_code;
+    char* response = execute_program(endpoint, body, &exit_code);
+    if (exit_code != 0) return construct_response(STATUS_ERR, CTYPE_TXT, "ERROR");
+    return response;
 }
 
 char* get_content_type(char* endpoint)
 {
     char* filetype = get_filetype(endpoint);
-    char* content_type = CTYPE_TEXT;
+    char* content_type = CTYPE_TXT;
     if (streq(filetype, EXT_HTML)) content_type = CTYPE_HTML;
     else if (streq(filetype, EXT_CSS)) content_type = CTYPE_CSS;
     else if (streq(filetype, EXT_JS)) content_type = CTYPE_JS;
@@ -72,7 +76,7 @@ char* handle_html(char* endpoint)
     if (is_dir(endpoint)) strcat(endpoint, FILENAME_INDEX);
     
     FILE* file = fopen(endpoint, "r");
-    if (!file) return construct_response(STATUS_NOTFOUND, CTYPE_TEXT, "NOT FOUND");
+    if (!file) return construct_response(STATUS_NOTFOUND, CTYPE_TXT, "NOT FOUND");
     char* body = read_file(file);
     fclose(file);
     

@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 bool str_startswith(const char* str, const char* prefix)
 {
@@ -63,40 +64,145 @@ char* read_file(FILE* file)
     return buffer;
 }
 
-char* execute_program(const char* filename, const char* input)
+char* execute_program(const char* filename, const char* input, int* exit_code)
 {
     int in_pipe[2];
     int out_pipe[2];
-    if (pipe(in_pipe) == -1 || pipe(out_pipe) == -1) return NULL;
-    pid_t pid = fork();
-    if (pid == -1) return NULL;
-    if (pid == 0)
+
+    if (exit_code != NULL) *exit_code = -1;
+
+    if (pipe(in_pipe) == -1) return NULL;
+
+    if (pipe(out_pipe) == -1)
     {
-        dup2(in_pipe[0], STDIN_FILENO);
-        dup2(out_pipe[1], STDOUT_FILENO);
+        close(in_pipe[0]);
+        close(in_pipe[1]);
+        return NULL;
+    }
+
+    char* output = malloc(1);
+
+    if (output == NULL)
+    {
         close(in_pipe[0]);
         close(in_pipe[1]);
         close(out_pipe[0]);
         close(out_pipe[1]);
-        execl(filename, filename, (char*)NULL);
-        exit(1);
+        return NULL;
     }
+
+    output[0] = '\0';
+
+    size_t size = 0;
+    int memory_error = 0;
+    int write_error = 0;
+    int read_error = 0;
+
+    pid_t pid = fork();
+
+    if (pid == -1)
+    {
+        free(output);
+        close(in_pipe[0]);
+        close(in_pipe[1]);
+        close(out_pipe[0]);
+        close(out_pipe[1]);
+        return NULL;
+    }
+
+    if (pid == 0)
+    {
+        close(in_pipe[1]);
+        close(out_pipe[0]);
+
+        if (dup2(in_pipe[0], STDIN_FILENO) == -1) _exit(126);
+        if (dup2(out_pipe[1], STDOUT_FILENO) == -1) _exit(126);
+        if (dup2(out_pipe[1], STDERR_FILENO) == -1) _exit(126);
+
+        close(in_pipe[0]);
+        close(out_pipe[1]);
+
+        execl(filename, filename, (char*)NULL);
+
+        perror(filename);
+        _exit(127);
+    }
+
     close(in_pipe[0]);
     close(out_pipe[1]);
-    write(in_pipe[1], input, strlen(input));
+
+    const char* input_data = input ? input : "";
+    size_t input_size = strlen(input_data);
+    size_t bytes_written = 0;
+
+    while (bytes_written < input_size)
+    {
+        ssize_t bytes = write(in_pipe[1], input_data + bytes_written, input_size - bytes_written);
+        if (bytes > 0) bytes_written += bytes;
+        else if (bytes == -1 && errno == EINTR) continue;
+        else
+        {
+            write_error = 1;
+            break;
+        }
+    }
+
     close(in_pipe[1]);
-    char* output = malloc(1);
-    size_t size = 0;
+
     char buffer[1024];
     ssize_t bytes_read;
+
     while ((bytes_read = read(out_pipe[0], buffer, sizeof(buffer))) > 0)
     {
-        output = realloc(output, size + bytes_read + 1);
+        if (memory_error) continue;
+
+        char* new_output = realloc(output, size + bytes_read + 1);
+
+        if (new_output == NULL)
+        {
+            free(output);
+            output = NULL;
+            memory_error = 1;
+            continue;
+        }
+
+        output = new_output;
+
         memcpy(output + size, buffer, bytes_read);
         size += bytes_read;
+        output[size] = '\0';
     }
+
+    if (bytes_read == -1) read_error = 1;
+
     close(out_pipe[0]);
-    output[size] = '\0';
-    waitpid(pid, NULL, 0);
+
+    int status;
+    pid_t wait_result;
+
+    do
+    {
+        wait_result = waitpid(pid, &status, 0);
+    }
+    while (wait_result == -1 && errno == EINTR);
+
+    if (wait_result == -1)
+    {
+        free(output);
+        return NULL;
+    }
+
+    if (exit_code != NULL)
+    {
+        if (WIFEXITED(status)) *exit_code = WEXITSTATUS(status);
+        else if (WIFSIGNALED(status)) *exit_code = 128 + WTERMSIG(status);
+    }
+
+    if (memory_error || write_error || read_error)
+    {
+        free(output);
+        return NULL;
+    }
+
     return output;
 }
