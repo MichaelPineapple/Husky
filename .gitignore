@@ -1,6 +1,3 @@
 *.DS_Store
 *.out
-*.key
-*.cert
-html/
-bin/
+www/

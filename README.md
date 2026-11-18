@@ -1,12 +1,9 @@
 # Husky
 HTTP Server
 
-Compile MacOS
+Compile (Local)
 ```
-gcc main.c \
-    -I$(brew --prefix openssl)/include \
-    -L$(brew --prefix openssl)/lib \
-    -lssl -lcrypto -lpthread
+gcc main.c -I$(brew --prefix openssl)/include -L$(brew --prefix openssl)/lib -lssl -lcrypto -lpthread
 ```
 
 Compile Linux
@@ -16,7 +13,7 @@ gcc main.c -lssl -lcrypto -lpthread
 
 Run
 ```
-./a.out 443 server.cert server.key
+./a.out 443 fullchain.pem privkey.pem
 ```
 
 Install OpenSSL Dev Library On Linux
@@ -31,7 +28,7 @@ curl -k -X POST https://localhost \
      -d '{"test":"hello"}'
 ```
 
-Generate SSL Certificate
+Generate sSSL Certificate
 ```
 openssl req -x509 -newkey rsa:2048 \
     -keyout server.key \
