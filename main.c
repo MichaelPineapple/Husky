@@ -13,6 +13,23 @@
 
 #include "utils.c"
 
+#define STATUS_OK "200 OK"
+#define STATUS_NOTFOUND "404 Not Found"
+
+#define EXT_HTML ".html"
+#define EXT_CSS ".css"
+#define EXT_JS ".js"
+
+#define CTYPE_TEXT "text/plain"
+#define CTYPE_HTML "text/html"
+#define CTYPE_CSS "text/css"
+#define CTYPE_JS "application/javascript"
+
+#define DIR_BIN "/bin"
+#define DIR_HTML "html"
+
+#define FILENAME_INDEX "index.html"
+
 char* construct_response(char* status_code, char* content_type, char* body)
 {
     const char* FORMAT =
@@ -25,26 +42,50 @@ char* construct_response(char* status_code, char* content_type, char* body)
         "\r\n%s";
     
     int content_len = strlen(body);
-    int total_len = content_len + int_strlen(content_len) + strlen(status_code) + strlen(content_type) + strlen(FORMAT);
+    int total_len = content_len + strlen(int_to_str(content_len)) + strlen(status_code) + strlen(content_type) + strlen(FORMAT);
     char* response = malloc(total_len);
     snprintf(response, total_len, FORMAT, status_code, content_type, content_len, body);
     return response;
 }
 
-void* handle_request(char* request)
+char* handle_bin(char* endpoint, char* request)
 {
-    char* endpoint = get_endpoint(request);
-    printf("Request: %s\n", endpoint);
-    str_prepend(endpoint, "html");
-    if (is_dir(endpoint)) strcat(endpoint, "index.html");
+    str_prepend(endpoint, ".");
+    char* body = strstr(request, "\r\n\r\n") + 4;
+    setenv("CONTENT_LENGTH", int_to_str(strlen(body)), 1);
+    return execute_program(endpoint, body);
+}
+
+char* get_content_type(char* endpoint)
+{
+    char* filetype = get_filetype(endpoint);
+    char* content_type = CTYPE_TEXT;
+    if (streq(filetype, EXT_HTML)) content_type = CTYPE_HTML;
+    else if (streq(filetype, EXT_CSS)) content_type = CTYPE_CSS;
+    else if (streq(filetype, EXT_JS)) content_type = CTYPE_JS;
+    return content_type;
+}
+
+char* handle_html(char* endpoint)
+{
+    str_prepend(endpoint, DIR_HTML);
+    if (is_dir(endpoint)) strcat(endpoint, FILENAME_INDEX);
     
     FILE* file = fopen(endpoint, "r");
-    if (!file) return construct_response("404 Not Found", "text/plain", "NOT FOUND");
+    if (!file) return construct_response(STATUS_NOTFOUND, CTYPE_TEXT, "NOT FOUND");
     char* body = read_file(file);
     fclose(file);
     
     char* content_type = get_content_type(endpoint);
-    return construct_response("200 OK", content_type, body);
+    return construct_response(STATUS_OK, content_type, body);
+}
+
+char* handle_request(char* request)
+{
+    char* endpoint = get_endpoint(request);
+    printf("Request: %s\n", endpoint);
+    if (str_startswith(endpoint, DIR_BIN)) return handle_bin(endpoint, request);
+    return handle_html(endpoint);
 }
 
 void handle_connection(SSL* ssl, int client)
