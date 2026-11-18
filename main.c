@@ -13,6 +13,8 @@
 
 #include "utils.c"
 
+#define REQUEST_BUFFER_SIZE 16384
+
 #define STATUS_OK "200 OK"
 #define STATUS_NOTFOUND "404 Not Found"
 #define STATUS_ERR "500 Internal Server Error"
@@ -94,7 +96,7 @@ char* handle_request(char* request)
 
 void handle_connection(SSL* ssl, int client)
 {
-    char request[1024];
+    char request[REQUEST_BUFFER_SIZE];
     if (ssl) SSL_read(ssl, request, sizeof(request));
     else recv(client, request, sizeof(request), 0);
     char* response = handle_request(request);
