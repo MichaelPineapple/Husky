@@ -28,6 +28,7 @@
 #define CTYPE_CSS "text/css"
 #define CTYPE_JS "application/javascript"
 
+#define DIR_WWW "www"
 #define DIR_BIN "/bin"
 #define DIR_HTML "html"
 
@@ -135,6 +136,8 @@ int main(int argc, char* argv[])
     SSL_CTX* ssl_ctx = NULL;
     if (argc > 2) ssl_ctx = init_ssl(argv[2], argv[3]);
     int sock = start_server(atoi(argv[1]));
+    
+    chdir(DIR_WWW);
     
     SSL* ssl = NULL;
     bool loop = true;
