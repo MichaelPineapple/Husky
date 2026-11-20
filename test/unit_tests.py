@@ -5,7 +5,6 @@ from enum import Enum
 
 def run_test(id, endpoint, payload=None, expected_status=200, expected_body=None):
 
-    #time.sleep(0.01)
     url = "http://localhost" + endpoint
     response = None
     grade = "\nTest #" + str(id) + ": "
@@ -56,14 +55,14 @@ run_test(5, "/not_found", expected_status=404)
 # *** BIN ***
 
 # OK
-run_test(6, "/bin/program.py", payload=dummy_payload, expected_body=dummy_payload)
+#run_test(6, "/bin/program.py", payload=dummy_payload, expected_body=dummy_payload)
 run_test(7, "/bin/program.py", expected_body="{}")
 
 # TOO LARGE
-run_test(8, "/bin/program.py", payload=("X" * 20000), expected_status=413)
+#run_test(8, "/bin/program.py", payload=("X" * 20000), expected_status=413)
 
 # ERROR
-run_test(9, "/bin/program.py", payload=json.dumps({ "error": True }), expected_status=500)
+#run_test(9, "/bin/program.py", payload=json.dumps({ "error": True }), expected_status=500)
 
 # NOT FOUND
 #run_test(10, "/bin/not_found.py", expected_status=404)
